@@ -1,0 +1,29 @@
+{
+  "name": "@smartpet/ui",
+  "version": "0.1.0",
+  "description": "SmartPet Web UI：PixiJS 宠物渲染 + 聊天/面板/小游戏/设置视图 + bridge（Tauri/浏览器 mock）",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@smartpet/ai": "workspace:*",
+    "@smartpet/core": "workspace:*",
+    "@smartpet/sync": "workspace:*",
+    "@tauri-apps/api": "^2.1.1",
+    "pixi.js": "^8.6.6"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "svelte": "^5.16.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0",
+    "vitest": "^3.0.5"
+  }
+}

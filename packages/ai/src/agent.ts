@@ -55,6 +55,10 @@ export class PetAgent {
     return this.agent.state.tools;
   }
 
+  get modelName(): string {
+    return this.agent.state.model.name || this.agent.state.model.id;
+  }
+
   setTools(tools: AgentTool<any>[]): void {
     this.agent.state.tools = tools;
   }
