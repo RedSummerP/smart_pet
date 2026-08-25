@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AppState } from '../src/app/app-state.js';
 import { createMockBridge } from '../src/bridge/mock.js';
+import type { PlatformBridge } from '../src/bridge/types.js';
 
 describe('AppState 装配层', () => {
   it('init：读取默认 settings、注册演示插件、agent 就绪', async () => {
@@ -66,6 +67,39 @@ describe('AppState 装配层', () => {
     const after = calls;
     app.feed();
     expect(calls).toBe(after);
+  });
+
+  it('皮肤：插件注册 4 套皮肤；换肤写入状态（可跨端同步）并可取调色板', async () => {
+    const app = new AppState(createMockBridge());
+    await app.init();
+    expect(app.skins.map((s) => s.id)).toEqual(
+      expect.arrayContaining(['classic', 'mocha', 'shadow', 'mint']),
+    );
+    expect(app.skinId).toBe('classic');
+    app.applySkin('mocha');
+    expect(app.pet.flags['skin']).toBe('mocha');
+    expect(app.skinId).toBe('mocha');
+    expect(app.getSkinPalette('mocha').fur).toEqual([222, 184, 152]);
+  });
+
+  it('托盘动作：feed → 真实喂食；games → 导航请求', async () => {
+    let trayHandler: ((action: string) => void) | undefined;
+    const bridge: PlatformBridge = {
+      ...createMockBridge(),
+      onTrayAction: (handler) => {
+        trayHandler = handler;
+      },
+    };
+    const app = new AppState(bridge);
+    await app.init();
+    const before = app.pet.stats.satiety;
+    expect(trayHandler).toBeDefined();
+    trayHandler!('feed');
+    expect(app.pet.stats.satiety).toBeGreaterThan(before);
+    trayHandler!('games');
+    expect(app.tabRequest).toBe('games');
+    app.consumeTab();
+    expect(app.tabRequest).toBeNull();
   });
 
   it('保存 settings 经 bridge 持久化', async () => {

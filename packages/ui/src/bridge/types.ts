@@ -13,6 +13,8 @@ export interface PlatformBridge {
   resolveKey(ref: string): Promise<string | undefined>;
   /** 桌面通知（可选） */
   notify?(title: string, body: string): Promise<void>;
+  /** 托盘菜单事件订阅（桌面端；action: feed/play/games/...） */
+  onTrayAction?(handler: (action: string) => void): void;
 }
 
 /** 浏览器中检测是否运行在 Tauri WebView */

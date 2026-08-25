@@ -38,6 +38,19 @@
     <button onclick={() => app.play()}>陪它玩</button>
   </div>
 
+  <div class="skins">
+    <span class="bar-label">皮肤</span>
+    {#each state.skins as skin}
+      <button
+        class:active={skin.id === state.skinId}
+        class="skin-btn"
+        onclick={() => app.applySkin(skin.id)}
+      >
+        {skin.name}
+      </button>
+    {/each}
+  </div>
+
   <div class="unlocks">
     已解锁：
     {#if state.pet.unlocks.length === 0}

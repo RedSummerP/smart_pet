@@ -6,6 +6,7 @@ import {
   type GameCapabilityImpl,
   type PetState,
   type PluginDefinition,
+  type SkinDefinition,
 } from '@smartpet/core';
 import {
   buildModels,
@@ -27,6 +28,8 @@ import {
   SyncPetStateStore,
 } from '@smartpet/sync';
 import memoryMatchPlugin from '@smartpet/plugin-memory-match';
+import skinsPlugin, { CLASSIC_SKIN } from '@smartpet/plugin-skins-classic';
+import type { SkinPalette } from '@smartpet/core';
 import type { PlatformBridge } from '../bridge/types.js';
 
 export interface ChatEntry {
@@ -49,10 +52,17 @@ export interface AppSnapshot {
   pet: PetState;
   messages: ChatEntry[];
   games: GameInfo[];
+  skins: Array<{ id: string; name: string }>;
+  skinId: string;
   settingsText: string;
   busy: boolean;
   ready: boolean;
   modelLabel: string;
+}
+
+export interface SkinEntry {
+  id: string;
+  name: string;
 }
 
 let seq = 0;
@@ -99,7 +109,11 @@ export class AppState {
   private _version = 0;
   private _messages: ChatEntry[] = [];
   private _games: GameInfo[] = [];
+  private _skins: SkinEntry[] = [];
+  private _tabRequest: 'panel' | 'chat' | 'games' | 'settings' | null = null;
+  private skinPalettes = new Map<string, SkinPalette>();
   private gamesByPlugin = new Map<string, string[]>();
+  private skinsByPlugin = new Map<string, string[]>();
   private listeners = new Set<() => void>();
   private faux: FauxProviderHandle | undefined;
   private mockMode = false;
@@ -132,6 +146,15 @@ export class AppState {
             this.gamesByPlugin.set(pluginId, ids);
             this._games = [...this._games, ...gameImpl.games.map((g) => ({ ...g }))];
             this.emit();
+          } else if (spec.kind === 'skins') {
+            const skinImpl = impl as { skins: SkinDefinition[] };
+            this.skinsByPlugin.set(
+              pluginId,
+              skinImpl.skins.map((s) => s.id),
+            );
+            for (const skin of skinImpl.skins) this.skinPalettes.set(skin.id, skin.palette);
+            this._skins = [...this._skins, ...skinImpl.skins.map((s) => ({ id: s.id, name: s.name }))];
+            this.emit();
           }
         },
         onCapabilityRemoved: (pluginId) => {
@@ -139,6 +162,13 @@ export class AppState {
           if (ids) {
             this.gamesByPlugin.delete(pluginId);
             this._games = this._games.filter((g) => !ids.includes(g.id));
+            this.emit();
+          }
+          const skinIds = this.skinsByPlugin.get(pluginId);
+          if (skinIds) {
+            this.skinsByPlugin.delete(pluginId);
+            for (const id of skinIds) this.skinPalettes.delete(id);
+            this._skins = this._skins.filter((s) => !skinIds.includes(s.id));
             this.emit();
           }
         },
@@ -184,12 +214,48 @@ export class AppState {
     return this._games;
   }
 
+  get skins(): SkinEntry[] {
+    return this._skins;
+  }
+
+  /** 当前皮肤 id（存于 PetState.flags.skin，随 CRDT 多端同步） */
+  get skinId(): string {
+    const value = this.pet.flags['skin'];
+    return typeof value === 'string' && this.skinPalettes.has(value) ? value : CLASSIC_SKIN.id;
+  }
+
+  getSkinPalette(skinId?: string): SkinPalette {
+    const id = skinId ?? this.skinId;
+    return this.skinPalettes.get(id) ?? CLASSIC_SKIN.palette;
+  }
+
+  /** 换肤：写入宠物状态（跨端同步） */
+  applySkin(skinId: string): void {
+    if (!this.skinPalettes.has(skinId)) return;
+    this.store.reduce({ type: 'setFlag', key: 'skin', value: skinId });
+    this.emit();
+  }
+
   get bridgeKind(): string {
     return this.bridge.kind;
   }
 
   get platformLabel(): string {
     return this.bridge.platform;
+  }
+
+  /** 待消费的导航请求（托盘/系统入口发起） */
+  get tabRequest(): 'panel' | 'chat' | 'games' | 'settings' | null {
+    return this._tabRequest;
+  }
+
+  requestTab(tab: 'panel' | 'chat' | 'games' | 'settings'): void {
+    this._tabRequest = tab;
+    this.emit();
+  }
+
+  consumeTab(): void {
+    this._tabRequest = null;
   }
 
   get modelLabel(): string {
@@ -211,6 +277,7 @@ export class AppState {
     }
 
     this.mockMode = this.bridge.kind === 'mock';
+    this.bridge.onTrayAction?.((action) => this.handleTrayAction(action));
     if (this.mockMode) {
       await this.initMockAgent();
     } else {
@@ -276,6 +343,29 @@ export class AppState {
   }
 
   // ---- 内部 ----
+
+  /** 托盘/系统入口动作（桌面端 tray:action） */
+  private handleTrayAction(action: string): void {
+    switch (action) {
+      case 'feed':
+        this.feed();
+        break;
+      case 'play':
+        this.play();
+        break;
+      case 'games':
+        this.requestTab('games');
+        break;
+      case 'chat':
+        this.requestTab('chat');
+        break;
+      case 'settings':
+        this.requestTab('settings');
+        break;
+      default:
+        break;
+    }
+  }
 
   private async initMockAgent(): Promise<void> {
     const faux = fauxProvider({ models: [{ id: 'faux', name: 'Faux 演示', contextWindow: 4096 }] });
@@ -399,8 +489,8 @@ export class AppState {
         );
       },
     };
-    // 官方插件走正式插件体系：@smartpet/plugin-memory-match（记忆翻牌）
-    for (const def of [demo, memoryMatchPlugin]) {
+    // 官方插件走正式插件体系：记忆翻牌 + 皮肤包
+    for (const def of [demo, memoryMatchPlugin, skinsPlugin]) {
       await this.registry.register(def.manifest, async () => def);
       await this.registry.enable(def.manifest.id);
     }

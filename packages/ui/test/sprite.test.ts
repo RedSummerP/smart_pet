@@ -9,15 +9,15 @@ import {
 
 describe('程序化像素猫精灵', () => {
   it('尺寸与 RGBA 缓冲正确', () => {
-    const sprite = renderCat();
+    const sprite = renderCat(CLASSIC_PALETTE);
     expect(sprite.width).toBe(CAT_WIDTH);
     expect(sprite.height).toBe(CAT_HEIGHT);
     expect(sprite.pixels.length).toBe(CAT_WIDTH * CAT_HEIGHT * 4);
   });
 
   it('确定性：同输入同输出；有足够可见像素但非全满', () => {
-    const a = renderCat();
-    const b = renderCat();
+    const a = renderCat(CLASSIC_PALETTE);
+    const b = renderCat(CLASSIC_PALETTE);
     expect(a.pixels).toEqual(b.pixels);
     const opaque = countOpaque(a);
     expect(opaque).toBeGreaterThan(40);

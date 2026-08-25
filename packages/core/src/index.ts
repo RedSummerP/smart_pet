@@ -8,3 +8,4 @@ export * from './plugin/manifest.js';
 export * from './plugin/types.js';
 export * from './plugin/registry.js';
 export * from './games/types.js';
+export * from './skins/types.js';

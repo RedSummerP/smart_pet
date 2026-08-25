@@ -1,9 +1,13 @@
 import { Application, Container, Sprite, Texture } from 'pixi.js';
+import type { SkinPalette } from '@smartpet/core';
+import { CLASSIC_SKIN } from '@smartpet/plugin-skins-classic';
 import { AnimationController, type PetVisualInput, type FrameState } from './animation.js';
-import { CLASSIC_PALETTE, renderCat, type RenderedSprite } from './sprite.js';
+import { renderCat, type RenderedSprite } from './sprite.js';
 
 export interface PetRendererOptions {
   canvas: HTMLCanvasElement;
+  /** 初始皮肤（缺省经典橘猫） */
+  palette?: SkinPalette;
   /** 注入时钟（测试可确定性推进） */
   now?: () => number;
 }
@@ -18,15 +22,22 @@ function textureFromRendered(rendered: RenderedSprite): Texture {
   return Texture.from(canvas as unknown as HTMLCanvasElement);
 }
 
+interface TextureSet {
+  open: Texture;
+  closed: Texture;
+  happy: Texture;
+}
+
 /**
- * Pixi 宠物渲染器：把程序化像素精灵贴到 WebGL 画布，按动画状态机每帧更新
- * （浮动/缩放/眨眼/翻转）。纯逻辑在 animation.ts / sprite.ts，本类只做上屏。
+ * Pixi 宠物渲染器：把程序化像素精灵贴到 WebGL 画布，按动画状态机每帧更新。
+ * 皮肤（palette）可随时切换 —— 重新生成贴图（换装随 PetState.flags.skin 跨端同步）。
  */
 export class PetRenderer {
   private readonly app: Application;
   private readonly stage: Container;
   private readonly sprite: Sprite;
   private readonly controller: AnimationController;
+  private textures!: TextureSet;
 
   constructor(options: PetRendererOptions) {
     this.controller = new AnimationController(options.now ?? (() => performance.now()));
@@ -34,19 +45,22 @@ export class PetRenderer {
     this.stage = new Container();
     this.app.stage.addChild(this.stage);
 
-    const open = textureFromRendered(renderCat(CLASSIC_PALETTE, { blink: false }));
-    const closed = textureFromRendered(renderCat(CLASSIC_PALETTE, { blink: true }));
-    const happy = textureFromRendered(renderCat(CLASSIC_PALETTE, { happy: true }));
-    this.sprite = new Sprite(open);
+    this.sprite = new Sprite();
     this.sprite.anchor.set(0.5, 0.5);
     this.sprite.position.set(this.app.screen.width / 2, this.app.screen.height / 2 + 30);
     this.stage.addChild(this.sprite);
 
-    // 缓存闭眼/开心纹理以便切换
-    this.textures = { open, closed, happy };
+    this.setPalette(options.palette ?? CLASSIC_SKIN.palette);
   }
 
-  private readonly textures: { open: Texture; closed: Texture; happy: Texture };
+  /** 换肤：根据调色板重建三张贴图（睁眼/闭眼/开心眼） */
+  setPalette(palette: SkinPalette): void {
+    this.textures = {
+      open: textureFromRendered(renderCat(palette, { blink: false })),
+      closed: textureFromRendered(renderCat(palette, { blink: true })),
+      happy: textureFromRendered(renderCat(palette, { happy: true })),
+    };
+  }
 
   update(input: PetVisualInput): FrameState {
     const frame = this.controller.update(input);

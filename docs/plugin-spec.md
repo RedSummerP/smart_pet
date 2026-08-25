@@ -48,7 +48,7 @@ export default {
 | kind | spec 附加字段 | `registerCapability(spec, impl)` 的 impl 形状 |
 |---|---|---|
 | `games` | — | `GameCapabilityImpl { games: GameDefinition[]; createSession? }` |
-| `skins` | `skinId` | `SkinImpl { id, name, sprites: SpriteSource, animations: Record<AnimationId, AnimationDef> }` |
+| `skins` | `skinId` | `SkinCapabilityImpl { skins: SkinDefinition[] }`（`SkinDefinition = { id, name, palette: SkinPalette }`，调色板类型在 `@smartpet/core`） |
 | `tools` | `toolNames` | `Record<name, ToolImpl>`（`ToolImpl = { description, parameters(JSON Schema), handler }`，合入 AI 工具注册表） |
 | `providers` | `providerId` | `ProviderPreset`（配置好 baseURL/auth 的 provider preset，供设置页一键添加） |
 | `sync-adapters` | `adapterId` | `SyncAdapter`（`push/pull/watch`） |

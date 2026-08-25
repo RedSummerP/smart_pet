@@ -16,6 +16,8 @@
     pet: app.pet,
     messages: [],
     games: [],
+    skins: [],
+    skinId: app.skinId,
     settingsText: '',
     busy: false,
     ready: false,
@@ -24,10 +26,17 @@
 
   $effect(() => {
     const unsub = app.subscribe(() => {
+      const requestedTab = app.tabRequest;
+      if (requestedTab) {
+        tab = requestedTab;
+        app.consumeTab();
+      }
       snap = {
         pet: app.pet,
         messages: app.messages,
         games: app.games,
+        skins: app.skins,
+        skinId: app.skinId,
         settingsText: app.settingsText,
         busy: app.busy,
         ready: app.ready,
@@ -39,7 +48,13 @@
 
   $effect(() => {
     if (!canvasEl || renderer) return;
-    renderer = new PetRenderer({ canvas: canvasEl });
+    renderer = new PetRenderer({ canvas: canvasEl, palette: app.getSkinPalette(app.skinId) });
+  });
+
+  // 换肤：皮肤变化时通知渲染器重建贴图
+  $effect(() => {
+    if (!renderer) return;
+    renderer.setPalette(app.getSkinPalette(snap.skinId));
   });
 
   $effect(() => {

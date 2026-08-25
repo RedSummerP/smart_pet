@@ -1,20 +1,11 @@
+import type { SkinPalette } from '@smartpet/core';
+import { CLASSIC_SKIN } from '@smartpet/plugin-skins-classic';
+
 /** 程序化像素猫：确定性生成 RGBA 帧缓冲（无外部资源、纯逻辑、可单测） */
+export type { SkinPalette };
 
-export interface SkinPalette {
-  fur: [number, number, number];
-  belly: [number, number, number];
-  ear: [number, number, number];
-  eye: [number, number, number];
-  blush: [number, number, number];
-}
-
-export const CLASSIC_PALETTE: SkinPalette = {
-  fur: [245, 166, 35], // 橘猫
-  belly: [255, 236, 210],
-  ear: [222, 90, 70],
-  eye: [30, 30, 30],
-  blush: [255, 140, 140],
-};
+/** 默认皮肤（经典橘猫） */
+export const CLASSIC_PALETTE: SkinPalette = CLASSIC_SKIN.palette;
 
 export const CAT_WIDTH = 22;
 export const CAT_HEIGHT = 20;
@@ -122,7 +113,7 @@ function eyes(c: Canvas, palette: SkinPalette, pose: CatPose): void {
 }
 
 /** 渲染一帧像素猫 */
-export function renderCat(palette: SkinPalette = CLASSIC_PALETTE, pose: CatPose = {}): RenderedSprite {
+export function renderCat(palette: SkinPalette, pose: CatPose = {}): RenderedSprite {
   const c = new Canvas(CAT_WIDTH, CAT_HEIGHT);
   const { fur, belly, ear } = palette;
 

@@ -62,8 +62,20 @@ interface SyncAdapter {
 | adapter | 说明 |
 |---|---|
 | `memory` | 测试/调试 |
-| `supabase` | MVP 默认：一行一条文档（bytes），`pet_rev` 表 + Realtime 订阅；RLS 按用户隔离 |
+| `supabase` | **已实现**（`@smartpet/sync` 的 `createSupabaseSyncBackend`，鸭子类型接入 supabase-js，应用层注入客户端）：`pet_state` 表一行一宠物（`pet_id` 主键 / `rev` / `binary` base64 / `updated_at`），Realtime 订阅远端变更；RLS 按用户隔离 |
 | `http`（规划） | 自托管极简 Node/Go 服务，版本化 JSON 存储（M2 后） |
+
+`pet_state` 建表 SQL：
+
+```sql
+create table if not exists public.pet_state (
+  pet_id     text primary key,
+  rev        text not null,
+  binary     text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.pet_state enable row level security;
+```
 
 ## 4. 冲突策略
 

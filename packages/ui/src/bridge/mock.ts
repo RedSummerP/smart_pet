@@ -66,5 +66,8 @@ export function createMockBridge(options: MockBridgeOptions = {}): PlatformBridg
     async resolveKey() {
       return undefined; // mock：无钥匙串
     },
+    onTrayAction() {
+      // mock：无托盘
+    },
   };
 }
