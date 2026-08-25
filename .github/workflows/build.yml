@@ -79,6 +79,8 @@ jobs:
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
       - run: pnpm install --frozen-lockfile
+      - name: Build all workspace packages
+        run: pnpm -r run build
       - run: pnpm --filter @smartpet/ui build
       # android/ 工程由 CI 生成（避免把大体积 gradle 工程入仓）
       - run: pnpm --filter smartpet-desktop tauri android init --ci
