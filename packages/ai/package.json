@@ -1,0 +1,32 @@
+{
+  "name": "@smartpet/ai",
+  "version": "0.1.0",
+  "description": "SmartPet 的 pi 集成层：provider 配置（兼容 DSH llm-pi-ai）、Models 构建、PetAgent（宠物人格 + 工具调用）",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@smartpet/core": "workspace:*",
+    "@earendil-works/pi-ai": "0.84.3",
+    "@earendil-works/pi-agent-core": "0.84.3",
+    "typebox": "1.3.7",
+    "yaml": "^2.6.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
