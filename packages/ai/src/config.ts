@@ -41,7 +41,35 @@ const settingsFileSchema = z.object({
         .optional(),
     })
     .optional(),
+  sync: z
+    .object({
+      adapter: z.enum(['memory', 'supabase']).default('memory'),
+      supabase: z
+        .object({
+          url: z.string().url(),
+          anonKey: z.string().min(1),
+          table: z.string().default('pet_state'),
+        })
+        .optional(),
+    })
+    .optional(),
 });
+
+/** 同步配置（应用层读取：memory 缺省 / supabase 实盘） */
+export interface ParsedSyncSettings {
+  adapter: 'memory' | 'supabase';
+  supabase?: { url: string; anonKey: string; table: string };
+}
+
+export function parseSyncSettings(yamlText: string): ParsedSyncSettings {
+  const doc = parseYaml(yamlText) as unknown;
+  const parsed = settingsFileSchema.parse(doc);
+  const block = parsed.sync;
+  return {
+    adapter: block?.adapter ?? 'memory',
+    supabase: block?.supabase ? { ...block.supabase } : undefined,
+  };
+}
 
 export interface ParsedSettings {
   providers: Array<ProviderConfig & { id: string }>;

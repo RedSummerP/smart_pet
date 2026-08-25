@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AppState } from '../src/app/app-state.js';
 import { createMockBridge } from '../src/bridge/mock.js';
 import type { PlatformBridge } from '../src/bridge/types.js';
+import type { SyncBackend } from '@smartpet/sync';
 
 describe('AppState 装配层', () => {
   it('init：读取默认 settings、注册演示插件、agent 就绪', async () => {
@@ -100,6 +101,69 @@ describe('AppState 装配层', () => {
     expect(app.tabRequest).toBe('games');
     app.consumeTab();
     expect(app.tabRequest).toBeNull();
+  });
+
+  it('本地持久化：flushPet 落盘 → 新 AppState 恢复同一宠物', async () => {
+    const storage = new Map<string, string>();
+    const storageLike = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => void storage.set(key, value),
+    };
+    const appA = new AppState(createMockBridge({ storage: storageLike }));
+    await appA.init();
+    appA.feed();
+    appA.rename('阿宝');
+    await appA.flushPet();
+
+    const appB = new AppState(createMockBridge({ storage: storageLike }));
+    await appB.init();
+    expect(appB.pet.meta.name).toBe('阿宝');
+    expect(appB.pet.stats.satiety).toBe(appA.pet.stats.satiety);
+    expect(appB.pet.stats.exp).toBe(appA.pet.stats.exp);
+  });
+
+  it('ticker：每秒驱动属性衰减', async () => {
+    vi.useFakeTimers();
+    try {
+      const app = new AppState(createMockBridge());
+      await app.init();
+      const before = app.pet.stats.satiety;
+      app.startTicker(1000);
+      vi.advanceTimersByTime(1000);
+      expect(app.pet.stats.satiety).toBeLessThan(before);
+      expect(app.pet.stats.satiety).toBeGreaterThanOrEqual(0);
+      app.stopTicker();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('attachRemoteSync：双端经远端后端收敛（M2 supabase 语义）', async () => {
+    let stored: { rev: string; binary: string } | null = null;
+    const backend: SyncBackend = {
+      async fetchRow() {
+        return stored ? { ...stored } : null;
+      },
+      async upsertRow(row) {
+        stored = { rev: row.rev, binary: row.binary };
+      },
+      subscribe: () => () => undefined,
+    };
+
+    const appA = new AppState(createMockBridge());
+    await appA.init();
+    const appB = new AppState(createMockBridge());
+    await appB.init();
+    await appA.attachRemoteSync(backend, 'supabase');
+    await appB.attachRemoteSync(backend, 'supabase');
+    expect(appA.syncLabel).toBe('supabase');
+    expect(appB.syncLabel).toBe('supabase');
+
+    appA.feed();
+    await appA.syncNow();
+    await appB.syncNow();
+    expect(appB.pet.stats.exp).toBe(appA.pet.stats.exp);
+    expect(appB.pet.stats.exp).toBeGreaterThan(0);
   });
 
   it('保存 settings 经 bridge 持久化', async () => {

@@ -10,6 +10,7 @@ async function bootstrap(): Promise<void> {
   const bridge = isTauriRuntime() ? await createTauriBridge() : createMockBridge();
   const appState = new AppState(bridge);
   await appState.init();
+  appState.startTicker(); // 主循环：宠物属性随时间衰减
   const target = document.getElementById('app');
   if (!target) throw new Error('缺少 #app 挂载点');
   mount(App, { target, props: { app: appState } });

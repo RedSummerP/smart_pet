@@ -104,7 +104,9 @@ export interface SyncBackend {
   subscribe(onChange: () => void): () => void;
 }
 
-/** 基于 SyncBackend 的通用远端适配器（跳板到 Supabase/HTTP） */
+/** 基于 SyncBackend 的通用远端适配器（跳板到 Supabase/HTTP）。
+ *  push 时与存量做"变更差分合并"（同 MemorySyncAdapter）—— 远程行是 CRDT 合并目标，
+ *  避免"后 push 者覆盖先 push 者"的数据竞争。 */
 export class RemoteSyncAdapter implements SyncAdapter {
   readonly id: string;
 
@@ -116,7 +118,18 @@ export class RemoteSyncAdapter implements SyncAdapter {
   }
 
   async push(binary: Uint8Array, rev: string): Promise<void> {
-    await this.backend.upsertRow({ rev, binary: bytesToBase64(binary) });
+    let out = binary;
+    const existing = await this.backend.fetchRow();
+    if (existing) {
+      const current = Automerge.load<Doc<unknown>>(base64ToBytes(existing.binary));
+      const incoming = Automerge.load<Doc<unknown>>(binary);
+      const changes = Automerge.getChanges(current, incoming);
+      if (changes.length > 0) {
+        const [merged] = Automerge.applyChanges(current, changes);
+        out = Automerge.save(merged);
+      }
+    }
+    await this.backend.upsertRow({ rev, binary: bytesToBase64(out) });
   }
 
   async pull(): Promise<{ binary: Uint8Array; rev: string } | null> {

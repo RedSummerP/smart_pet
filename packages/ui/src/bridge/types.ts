@@ -15,6 +15,10 @@ export interface PlatformBridge {
   notify?(title: string, body: string): Promise<void>;
   /** 托盘菜单事件订阅（桌面端；action: feed/play/games/...） */
   onTrayAction?(handler: (action: string) => void): void;
+  /** 读取本地持久化的宠物文档（base64 或 null） */
+  loadPetBinary(): Promise<string | null>;
+  /** 保存本地持久化的宠物文档（base64） */
+  savePetBinary(base64: string): Promise<void>;
 }
 
 /** 浏览器中检测是否运行在 Tauri WebView */

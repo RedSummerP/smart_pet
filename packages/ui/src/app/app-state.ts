@@ -16,6 +16,7 @@ import {
   fauxProvider,
   fauxToolCall,
   parseSettings,
+  parseSyncSettings,
   personalityPrompt,
   type AgentEvent,
   type FauxProviderHandle,
@@ -23,9 +24,14 @@ import {
   type PetAgent,
 } from '@smartpet/ai';
 import {
+  base64ToBytes,
+  bytesToBase64,
   MemorySyncAdapter,
+  RemoteSyncAdapter,
   SyncEngine,
   SyncPetStateStore,
+  createSupabaseSyncBackend,
+  type SyncBackend,
 } from '@smartpet/sync';
 import memoryMatchPlugin from '@smartpet/plugin-memory-match';
 import skinsPlugin, { CLASSIC_SKIN } from '@smartpet/plugin-skins-classic';
@@ -58,11 +64,18 @@ export interface AppSnapshot {
   busy: boolean;
   ready: boolean;
   modelLabel: string;
+  syncLabel: string;
 }
 
 export interface SkinEntry {
   id: string;
   name: string;
+}
+
+/** 应用装配参数 */
+export interface AppStateOptions {
+  /** 测试/自托管注入 supabase 客户端工厂（缺省动态 import supabase-js） */
+  supabaseFactory?: (url: string, anonKey: string) => unknown;
 }
 
 let seq = 0;
@@ -99,7 +112,7 @@ export class AppState {
   readonly store = new SyncPetStateStore();
   readonly runtime: PetRuntime;
   readonly registry: PluginRegistry;
-  readonly sync: SyncEngine;
+  sync: SyncEngine;
 
   agent?: PetAgent;
   ready = false;
@@ -111,14 +124,23 @@ export class AppState {
   private _games: GameInfo[] = [];
   private _skins: SkinEntry[] = [];
   private _tabRequest: 'panel' | 'chat' | 'games' | 'settings' | null = null;
+  private _syncLabel = 'memory';
   private skinPalettes = new Map<string, SkinPalette>();
   private gamesByPlugin = new Map<string, string[]>();
   private skinsByPlugin = new Map<string, string[]>();
   private listeners = new Set<() => void>();
   private faux: FauxProviderHandle | undefined;
   private mockMode = false;
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  private ticker: ReturnType<typeof setInterval> | undefined;
+  private restored = false;
+  private readonly supabaseFactory?: (url: string, anonKey: string) => unknown;
 
-  constructor(private readonly bridge: PlatformBridge) {
+  constructor(
+    private readonly bridge: PlatformBridge,
+    options: AppStateOptions = {},
+  ) {
+    this.supabaseFactory = options.supabaseFactory;
     this.runtime = new PetRuntime(this.store, this.bus);
 
     const kvMaps = new Map<string, Map<string, unknown>>();
@@ -180,6 +202,8 @@ export class AppState {
       debounceMs: 1000,
     });
     this.sync.start();
+    // 本地变更 → 落盘（本地优先：进程重启后宠物仍在）
+    this.store.subscribe(() => this.schedulePersist());
 
     // 游戏成绩 → 宠物状态（gameProgress 随 CRDT 多端同步）
     this.bus.on('game:score', ({ game, score }) => {
@@ -268,12 +292,19 @@ export class AppState {
   }
 
   async init(): Promise<void> {
+    await this.restorePet();
     this.settingsText = await this.bridge.readSettings();
     let settings: ReturnType<typeof parseSettings>;
     try {
       settings = parseSettings(this.settingsText);
     } catch {
       settings = { providers: [], default: undefined };
+    }
+
+    // 多端同步后端：settings 的 sync 块（缺省 memory）
+    const syncCfg = parseSyncSettings(this.settingsText);
+    if (syncCfg.adapter === 'supabase' && syncCfg.supabase) {
+      await this.enableSupabaseSync(syncCfg.supabase);
     }
 
     this.mockMode = this.bridge.kind === 'mock';
@@ -343,6 +374,95 @@ export class AppState {
   }
 
   // ---- 内部 ----
+
+  /** 本地持久化：从 bridge 恢复宠物文档（base64） */
+  private async restorePet(): Promise<void> {
+    if (this.restored) return;
+    this.restored = true;
+    try {
+      const base64 = await this.bridge.loadPetBinary();
+      if (!base64) return;
+      this.store.mergeIncoming(base64ToBytes(base64));
+      this.emit();
+    } catch {
+      // 损坏/缺失 → 保持默认宠物
+    }
+  }
+
+  /** 立即落盘（测试/显式调用） */
+  async flushPet(): Promise<void> {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+    }
+    await this.bridge.savePetBinary(bytesToBase64(this.store.save()));
+  }
+
+  private schedulePersist(): void {
+    if (this.persistTimer) clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      void this.flushPet();
+    }, 500);
+  }
+
+  /** 启动主循环 tick（属性衰减；由宿主调用，默认每秒） */
+  startTicker(intervalMs = 1000): void {
+    if (this.ticker) return;
+    this.ticker = setInterval(() => {
+      this.runtime.tick(intervalMs);
+      this.emit();
+    }, intervalMs);
+  }
+
+  stopTicker(): void {
+    if (this.ticker) {
+      clearInterval(this.ticker);
+      this.ticker = undefined;
+    }
+  }
+
+  get syncLabel(): string {
+    return this._syncLabel;
+  }
+
+  /** 立即同步一轮（上行+下行） */
+  async syncNow(): Promise<void> {
+    await this.sync.syncNow();
+  }
+
+  /** 接入 Supabase 同步（settings sync 块驱动） */
+  async enableSupabaseSync(cfg: { url: string; anonKey: string; table?: string }): Promise<void> {
+    try {
+      let supabase: unknown;
+      if (this.supabaseFactory) {
+        supabase = this.supabaseFactory(cfg.url, cfg.anonKey);
+      } else {
+        const { createClient } = await import('@supabase/supabase-js');
+        supabase = createClient(cfg.url, cfg.anonKey);
+      }
+      const backend = createSupabaseSyncBackend(supabase as never, this.store.get().meta.id, {
+        table: cfg.table,
+      });
+      await this.attachRemoteSync(backend, 'supabase');
+    } catch {
+      this._syncLabel = 'supabase-error';
+      this.emit();
+    }
+  }
+
+  /** 接入任意同步后端（插件 sync-adapters 同走此入口）；完成初始一轮同步后返回 */
+  async attachRemoteSync(backend: SyncBackend, label: string): Promise<void> {
+    this.sync.stop();
+    this.sync = new SyncEngine(this.store, [new RemoteSyncAdapter(label, backend)], {
+      bus: this.bus,
+      debounceMs: 1000,
+    });
+    this.sync.start();
+    this._syncLabel = label;
+    await this.sync.syncNow();
+    this.emit();
+  }
 
   /** 托盘/系统入口动作（桌面端 tray:action） */
   private handleTrayAction(action: string): void {

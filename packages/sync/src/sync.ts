@@ -19,6 +19,7 @@ export class SyncEngine {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private unsubscribes: Array<() => void> = [];
   private syncing = false;
+  private syncQueued = false;
 
   constructor(
     private readonly store: SyncPetStateStore,
@@ -46,13 +47,24 @@ export class SyncEngine {
     this.timers.clear();
   }
 
-  /** 立即同步一轮：先上行后下行（下行合并后若有变化会再触发上行，防环由 rev 比对保证） */
+  /**
+   * 立即同步一轮。顺序：先拉后推 ——
+   * - 新设备先拉取采纳远端为基底（避免把自己的 genesis 合并进远程造成计数器翻倍）
+   * - 再推本地增量（adapter 层面仍做差分合并，作为并发安全网）
+   * 并发调用排队重跑，不静默丢弃。
+   */
   async syncNow(): Promise<void> {
-    if (this.syncing) return;
+    if (this.syncing) {
+      this.syncQueued = true;
+      return;
+    }
     this.syncing = true;
     try {
-      await this.pushAll();
-      await this.pullAll();
+      do {
+        this.syncQueued = false;
+        await this.pullAll();
+        await this.pushAll();
+      } while (this.syncQueued);
     } finally {
       this.syncing = false;
     }

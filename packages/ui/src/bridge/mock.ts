@@ -1,6 +1,6 @@
 import type { PlatformBridge, Platform } from './types.js';
 
-/** 默认 settings.yaml（与 DSH llm-pi-ai 配置同构；key 只存引用） */
+/** 默认 settings.yaml（与 DSH llm-pi-ai 配置同构；key 只存引用；sync 块配置同步后端） */
 export const DEFAULT_SETTINGS_YAML = `# SmartPet AI 提供商配置（key 只存引用，明文 key 进系统钥匙串）
 llm-pi-ai:
   providers:
@@ -36,38 +36,62 @@ llm-pi-ai:
   default:
     provider: deepseek-official
     model: deepseek-chat
+
+# 多端同步（缺省 memory = 本地优先不联网；配好 Supabase 后改为 supabase 即可上线）
+# sync:
+#   adapter: supabase
+#   supabase:
+#     url: https://YOUR-PROJECT.supabase.co
+#     anonKey: eyJ...你的匿名key
+#     table: pet_state
 `;
 
-const KEY = 'smartpet.settings.yaml';
+const SETTINGS_KEY = 'smartpet.settings.yaml';
+const PET_BINARY_KEY = 'smartpet.pet.bin.b64';
 
 export interface MockBridgeOptions {
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
   platform?: Platform;
 }
 
-/** 浏览器/测试用 mock bridge：settings 存 localStorage（node 无 localStorage 时退回内存） */
+/** 浏览器/测试用 mock bridge：settings 与宠物文档存 localStorage（node 无 localStorage 时退回内存） */
 export function createMockBridge(options: MockBridgeOptions = {}): PlatformBridge {
-  let settingsText = '';
-  const storage = options.storage ?? (typeof localStorage !== 'undefined' ? localStorage : undefined);
+  const memory = new Map<string, string>();
+  const storage =
+    options.storage ??
+    (typeof localStorage !== 'undefined' ? localStorage : undefined);
+  const read = (key: string): string | null => {
+    if (storage) {
+      const stored = storage.getItem(key);
+      if (stored !== null) return stored;
+    }
+    return memory.get(key) ?? null;
+  };
+  const write = (key: string, value: string): void => {
+    memory.set(key, value);
+    storage?.setItem(key, value);
+  };
+
   return {
     kind: 'mock',
     platform: options.platform ?? 'web',
     async readSettings() {
-      if (storage) {
-        const stored = storage.getItem(KEY);
-        if (stored !== null) return stored;
-      }
-      return settingsText || DEFAULT_SETTINGS_YAML;
+      return read(SETTINGS_KEY) ?? DEFAULT_SETTINGS_YAML;
     },
     async saveSettings(text: string) {
-      settingsText = text;
-      storage?.setItem(KEY, text);
+      write(SETTINGS_KEY, text);
     },
     async resolveKey() {
       return undefined; // mock：无钥匙串
     },
     onTrayAction() {
       // mock：无托盘
+    },
+    async loadPetBinary() {
+      return read(PET_BINARY_KEY);
+    },
+    async savePetBinary(base64: string) {
+      write(PET_BINARY_KEY, base64);
     },
   };
 }

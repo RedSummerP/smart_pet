@@ -39,7 +39,11 @@ UI/插件 ──PetAction──► PetRuntime.dispatch
 
 - **同步粒度**：传输用二进制快照，合并用**变更差分**（`getChanges(本地, 远端)` + `applyChanges`）——**绝不整库 `Automerge.merge`**（会重复计入双方 genesis 的初始值）。
 - **genesis 采纳**：宠物由一台设备创建，其文档即 genesis；新设备首次收到远端且本地未做任何变更（pristine）→ 整体采纳远端为基底。
-- 断线：变更进 Automerge 历史，重连后随下次 push 携带。
+- **同步顺序（先拉后推）**：`syncNow()` 先 `pullAll` 再 `pushAll`——新设备先拉取采纳远端为基底，再推本地增量；若颠倒，新设备会把自己的 genesis 合并进远程，造成计数器翻倍。
+- **远端合并安全网**：`RemoteSyncAdapter.push` 时与存量做差分合并（远程行是 CRDT 合并目标），并发双写（如两台设备同时喂食）不互相覆盖。
+- **并发调用排队**：`syncNow()` 进行中再调用不会静默丢弃，排队重跑一轮。
+- **本地持久化**：宠物文档经 bridge 落盘（桌面端 `~/.smartpet/pet.bin.b64`、浏览器 localStorage），进程重启后恢复；与远程同步正交（本地优先）。
+- 断线：变更进 Automerge 历史，重连后随下次 pull/push 携带。
 - 上线：`adapter.pull()` → 差分应用 → 广播 `sync:changed { rev, state }` → 合并产物回推。
 
 ## 3. SyncAdapter 接口（可插拔）

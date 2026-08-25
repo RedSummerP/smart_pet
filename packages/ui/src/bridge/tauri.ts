@@ -28,6 +28,8 @@ export async function createTauriBridge(): Promise<PlatformBridge> {
         handler(payload.action ?? '');
       }).catch(() => undefined);
     },
+    loadPetBinary: () => invoke<string | null>('load_pet_binary').then((v) => v ?? null),
+    savePetBinary: (base64) => invoke('save_pet_binary', { base64 }),
   };
 }
 

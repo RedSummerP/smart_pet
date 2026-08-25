@@ -20,6 +20,8 @@
   <textarea bind:value={draft} rows="16" spellcheck="false" class="yaml"></textarea>
   <div class="settings-actions">
     <button onclick={() => void save()}>保存配置</button>
-    <span class="meta">运行环境：{app.bridgeKind}（{app.platformLabel}）· 当前模型：{state.modelLabel}</span>
+    <span class="meta"
+      >运行环境：{app.bridgeKind}（{app.platformLabel}）· 模型：{state.modelLabel} · 同步：{state.syncLabel}</span
+    >
   </div>
 </div>

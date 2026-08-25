@@ -69,6 +69,24 @@ fn resolve_key(reference: String) -> Result<Option<String>, String> {
     Ok(map.get(&reference).and_then(|v| v.as_str()).map(String::from))
 }
 
+/// 读取本地持久化的宠物文档（base64；缺失返回 null）
+#[tauri::command]
+fn load_pet_binary() -> Result<Option<String>, String> {
+    let path = data_dir().join("pet.bin.b64");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Ok(Some(text.trim().to_string())),
+        Err(_) => Ok(None),
+    }
+}
+
+/// 保存本地持久化的宠物文档（base64）
+#[tauri::command]
+fn save_pet_binary(base64: String) -> Result<(), String> {
+    let dir = data_dir();
+    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+    std::fs::write(dir.join("pet.bin.b64"), base64).map_err(|err| err.to_string())
+}
+
 /// 当前平台（bridge 用）
 #[tauri::command]
 fn platform() -> Result<String, String> {
@@ -140,6 +158,8 @@ pub fn run() {
             read_settings,
             save_settings,
             resolve_key,
+            load_pet_binary,
+            save_pet_binary,
             platform,
             notify
         ])

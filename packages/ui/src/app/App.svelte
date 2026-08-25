@@ -22,6 +22,7 @@
     busy: false,
     ready: false,
     modelLabel: '',
+    syncLabel: 'memory',
   });
 
   $effect(() => {
@@ -41,6 +42,7 @@
         busy: app.busy,
         ready: app.ready,
         modelLabel: app.modelLabel,
+        syncLabel: app.syncLabel,
       };
     });
     return unsub;
