@@ -13,7 +13,7 @@ export npm_config_fund=false
 export npm_config_confirm_modules_purge=false
 export CI=true
 
-PACKAGES="core ai sync ui plugins plugins/games/memory-match plugins/games/2048 plugins/skins/classic"
+PACKAGES="core ai sync ui plugins plugins/games/memory-match plugins/games/2048 plugins/skins/classic plugins/tools/fun"
 
 echo "== 1/4 pnpm install（尽力而为，失败不阻塞后续校验）=="
 pnpm install --store-dir "$NPM_CONFIG_STORE_DIR" 2>&1 | tail -2 || echo "  (install 失败，继续用现有 node_modules 校验)"

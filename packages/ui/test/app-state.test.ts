@@ -3,6 +3,7 @@ import { AppState } from '../src/app/app-state.js';
 import { createMockBridge } from '../src/bridge/mock.js';
 import type { PlatformBridge } from '../src/bridge/types.js';
 import type { SyncBackend } from '@smartpet/sync';
+import type { PluginDefinition } from '@smartpet/core';
 
 describe('AppState 装配层', () => {
   it('init：读取默认 settings、注册演示插件、agent 就绪', async () => {
@@ -17,6 +18,11 @@ describe('AppState 装配层', () => {
     );
     expect(app.agent).toBeTruthy();
     expect(app.modelLabel).toBeTruthy();
+    // 工具插件化：娱乐工具包已并入 agent 工具集
+    const agentToolNames = app.agent!.tools.map((t) => t.name);
+    expect(agentToolNames).toEqual(
+      expect.arrayContaining(['coin_flip', 'dice', 'fortune', 'calc', 'now', 'note', 'pet_actions']),
+    );
   });
 
   it('喂食/玩耍/改名：真实改变宠物状态并广播', async () => {
@@ -166,6 +172,54 @@ describe('AppState 装配层', () => {
     await appB.syncNow();
     expect(appB.pet.stats.exp).toBe(appA.pet.stats.exp);
     expect(appB.pet.stats.exp).toBeGreaterThan(0);
+  });
+
+  it('插件能力接线：providers / sync-adapters capability 收集并可消费', async () => {
+    const app = new AppState(createMockBridge());
+    await app.init();
+    const backendFactory = (): SyncBackend => ({
+      fetchRow: async () => null,
+      upsertRow: async () => undefined,
+      subscribe: () => () => undefined,
+    });
+    const inline: PluginDefinition = {
+      manifest: {
+        id: '@test/caps',
+        name: '能力演示',
+        version: '0.1.0',
+        requires: { pipet: '>=0.1.0' },
+        capabilities: [
+          { kind: 'providers', providerId: 'groq-preset' },
+          { kind: 'sync-adapters', adapterId: 'plugin-sync' },
+        ],
+        permissions: [],
+      },
+      setup: (ctx) => {
+        ctx.registerCapability({ kind: 'providers', providerId: 'groq-preset' }, {
+          provider: {
+            id: 'groq-preset',
+            api: 'openai-completions',
+            baseURL: 'https://api.groq.com/openai/v1',
+            apiKeyEnv: 'GROQ_API_KEY',
+            models: [{ id: 'llama-3.3-70b', contextWindow: 131072 }],
+          },
+        });
+        ctx.registerCapability({ kind: 'sync-adapters', adapterId: 'plugin-sync' }, { create: backendFactory });
+      },
+    };
+    await app.registry.register(inline.manifest, async () => inline);
+    await app.registry.enable(inline.manifest.id);
+
+    expect(app.providerPresetIds).toContain('groq-preset');
+    expect(app.syncAdapterIds).toContain('plugin-sync');
+
+    await app.attachPluginSyncAdapter('plugin-sync');
+    expect(app.syncLabel).toBe('plugin-sync');
+
+    // 禁用插件 → 收集物移除
+    await app.registry.disable(inline.manifest.id);
+    expect(app.providerPresetIds).not.toContain('groq-preset');
+    expect(app.syncAdapterIds).not.toContain('plugin-sync');
   });
 
   it('保存 settings 经 bridge 持久化', async () => {

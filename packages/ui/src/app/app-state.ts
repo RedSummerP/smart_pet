@@ -22,6 +22,8 @@ import {
   type FauxProviderHandle,
   type MutableModels,
   type PetAgent,
+  type PetToolDef,
+  type ProviderConfig,
 } from '@smartpet/ai';
 import {
   base64ToBytes,
@@ -36,6 +38,7 @@ import {
 import memoryMatchPlugin from '@smartpet/plugin-memory-match';
 import game2048Plugin from '@smartpet/plugin-game-2048';
 import skinsPlugin, { CLASSIC_SKIN } from '@smartpet/plugin-skins-classic';
+import funToolsPlugin from '@smartpet/plugin-tools-fun';
 import type { SkinPalette } from '@smartpet/core';
 import type { PlatformBridge } from '../bridge/types.js';
 
@@ -126,9 +129,15 @@ export class AppState {
   private _skins: SkinEntry[] = [];
   private _tabRequest: 'panel' | 'chat' | 'games' | 'settings' | null = null;
   private _syncLabel = 'memory';
+  private extraTools: PetToolDef[] = [];
+  private providerPresets = new Map<string, ProviderConfig & { id: string }>();
+  private syncAdapterFactories = new Map<string, () => SyncBackend>();
   private skinPalettes = new Map<string, SkinPalette>();
   private gamesByPlugin = new Map<string, string[]>();
   private skinsByPlugin = new Map<string, string[]>();
+  private toolsByPlugin = new Map<string, string[]>();
+  private providersByPlugin = new Map<string, string[]>();
+  private syncAdaptersByPlugin = new Map<string, string[]>();
   private listeners = new Set<() => void>();
   private faux: FauxProviderHandle | undefined;
   private mockMode = false;
@@ -178,6 +187,21 @@ export class AppState {
             for (const skin of skinImpl.skins) this.skinPalettes.set(skin.id, skin.palette);
             this._skins = [...this._skins, ...skinImpl.skins.map((s) => ({ id: s.id, name: s.name }))];
             this.emit();
+          } else if (spec.kind === 'tools') {
+            const { tools } = impl as { tools: PetToolDef[] };
+            this.toolsByPlugin.set(pluginId, spec.toolNames);
+            this.extraTools = [...this.extraTools, ...tools];
+            this.emit();
+          } else if (spec.kind === 'providers') {
+            const { provider } = impl as { provider: ProviderConfig & { id: string } };
+            this.providerPresets.set(provider.id, provider);
+            this.providersByPlugin.set(pluginId, [provider.id]);
+            this.emit();
+          } else if (spec.kind === 'sync-adapters') {
+            const { create } = impl as { create: () => SyncBackend };
+            this.syncAdapterFactories.set(spec.adapterId, create);
+            this.syncAdaptersByPlugin.set(pluginId, [spec.adapterId]);
+            this.emit();
           }
         },
         onCapabilityRemoved: (pluginId) => {
@@ -192,6 +216,24 @@ export class AppState {
             this.skinsByPlugin.delete(pluginId);
             for (const id of skinIds) this.skinPalettes.delete(id);
             this._skins = this._skins.filter((s) => !skinIds.includes(s.id));
+            this.emit();
+          }
+          const toolNames = this.toolsByPlugin.get(pluginId);
+          if (toolNames) {
+            this.toolsByPlugin.delete(pluginId);
+            this.extraTools = this.extraTools.filter((t) => !toolNames.includes(t.name));
+            this.emit();
+          }
+          const providerIds = this.providersByPlugin.get(pluginId);
+          if (providerIds) {
+            this.providersByPlugin.delete(pluginId);
+            for (const id of providerIds) this.providerPresets.delete(id);
+            this.emit();
+          }
+          const adapterIds = this.syncAdaptersByPlugin.get(pluginId);
+          if (adapterIds) {
+            this.syncAdaptersByPlugin.delete(pluginId);
+            for (const id of adapterIds) this.syncAdapterFactories.delete(id);
             this.emit();
           }
         },
@@ -310,12 +352,13 @@ export class AppState {
 
     this.mockMode = this.bridge.kind === 'mock';
     this.bridge.onTrayAction?.((action) => this.handleTrayAction(action));
+    // 插件先注册：收集 tools / providers / sync-adapters 能力后再构建 agent 与同步链路
+    await this.registerBuiltinPlugins();
     if (this.mockMode) {
       await this.initMockAgent();
     } else {
       await this.initRealAgent(settings);
     }
-    await this.registerBuiltinPlugins();
     this.ready = true;
     this.emit();
   }
@@ -423,13 +466,36 @@ export class AppState {
     }
   }
 
+  /** 当前同步后端类型标签（memory / supabase / 插件 adapter id …） */
   get syncLabel(): string {
     return this._syncLabel;
+  }
+
+  /** 插件提供的 AI 工具名（tools capability） */
+  get pluginToolNames(): string[] {
+    return this.extraTools.map((t) => t.name);
+  }
+
+  /** 插件提供的 AI provider 预设 id（providers capability） */
+  get providerPresetIds(): string[] {
+    return [...this.providerPresets.keys()];
+  }
+
+  /** 插件提供的同步适配器 id（sync-adapters capability） */
+  get syncAdapterIds(): string[] {
+    return [...this.syncAdapterFactories.keys()];
   }
 
   /** 立即同步一轮（上行+下行） */
   async syncNow(): Promise<void> {
     await this.sync.syncNow();
+  }
+
+  /** 接入插件注册的同步后端（sync-adapters capability） */
+  async attachPluginSyncAdapter(adapterId: string): Promise<void> {
+    const factory = this.syncAdapterFactories.get(adapterId);
+    if (!factory) throw new Error(`未知同步适配器: ${adapterId}`);
+    await this.attachRemoteSync(factory(), adapterId);
   }
 
   /** 接入 Supabase 同步（settings sync 块驱动） */
@@ -499,6 +565,7 @@ export class AppState {
       modelId: 'faux',
       state: this.store.get(),
       runtime: this.runtime,
+      extraTools: [...this.extraTools],
       onEvent: (event) => this.handleAgentEvent(event),
     });
     this.agent = created.agent;
@@ -509,7 +576,8 @@ export class AppState {
     default?: { provider: string; model: string };
   }): Promise<void> {
     const models = buildModels({
-      providers: settings.providers as never,
+      // settings providers + 插件 providers capability 预设
+      providers: [...settings.providers, ...this.providerPresets.values()] as never,
       keyResolver: (ref) => this.bridge.resolveKey(ref),
     });
     const def = settings.default;
@@ -528,6 +596,7 @@ export class AppState {
       modelId: def.model,
       state: this.store.get(),
       runtime: this.runtime,
+      extraTools: [...this.extraTools],
       onEvent: (event) => this.handleAgentEvent(event),
     });
     this.agent = created.agent;
@@ -610,8 +679,8 @@ export class AppState {
         );
       },
     };
-    // 官方插件走正式插件体系：记忆翻牌 + 2048 + 皮肤包
-    for (const def of [demo, memoryMatchPlugin, game2048Plugin, skinsPlugin]) {
+    // 官方插件走正式插件体系：游戏 + 皮肤 + 工具（tools capability 汇入 agent 工具集）
+    for (const def of [demo, memoryMatchPlugin, game2048Plugin, skinsPlugin, funToolsPlugin]) {
       await this.registry.register(def.manifest, async () => def);
       await this.registry.enable(def.manifest.id);
     }
