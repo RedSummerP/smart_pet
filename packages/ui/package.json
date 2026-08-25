@@ -17,6 +17,7 @@
     "@smartpet/plugin-memory-match": "workspace:*",
     "@smartpet/plugin-skins-classic": "workspace:*",
     "@smartpet/plugin-tools-fun": "workspace:*",
+    "@smartpet/plugin-achievements": "workspace:*",
     "@smartpet/sync": "workspace:*",
     "@supabase/supabase-js": "^2.45.0",
     "@tauri-apps/api": "^2.1.1",

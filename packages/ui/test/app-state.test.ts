@@ -222,6 +222,20 @@ describe('AppState 装配层', () => {
     expect(app.syncAdapterIds).not.toContain('plugin-sync');
   });
 
+  it('成就系统（hooks capability）：喂食 5 次解锁「新手饲主」，只触发一次', async () => {
+    const app = new AppState(createMockBridge());
+    await app.init();
+    for (let i = 0; i < 5; i++) app.feed();
+    await vi.waitFor(() => {
+      expect(app.pet.unlocks).toContain('achievement:feeder-5');
+    });
+    expect(app.messages.some((m) => m.role === 'notice' && m.text.includes('新手饲主'))).toBe(true);
+    app.feed();
+    await vi.waitFor(() => {
+      expect(app.messages.filter((m) => m.text.includes('新手饲主')).length).toBe(1);
+    });
+  });
+
   it('保存 settings 经 bridge 持久化', async () => {
     const app = new AppState(createMockBridge());
     await app.init();

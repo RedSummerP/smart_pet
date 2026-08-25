@@ -99,6 +99,9 @@ importers:
       '@smartpet/core':
         specifier: workspace:*
         version: link:../core
+      '@smartpet/plugin-achievements':
+        specifier: workspace:*
+        version: link:../../plugins/behaviors/achievements
       '@smartpet/plugin-game-2048':
         specifier: workspace:*
         version: link:../../plugins/games/2048
@@ -142,6 +145,19 @@ importers:
       vite-plugin-wasm:
         specifier: ^3.6.0
         version: 3.6.0(vite@6.4.3(@types/node@26.2.0)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@26.2.0)(yaml@2.9.0)
+
+  plugins/behaviors/achievements:
+    dependencies:
+      '@smartpet/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.7.3
       vitest:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@26.2.0)(yaml@2.9.0)

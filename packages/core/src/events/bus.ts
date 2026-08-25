@@ -18,6 +18,9 @@ export interface PetEventMap {
   /** 游戏行为相关事件 */
   'game:score': { game: string; score: number };
   'game:unlocked': { game: string };
+  /** 成就/通知（hooks capability 产物） */
+  'achievement:unlocked': { id: string; name: string };
+  'notice': { text: string };
   /** 同步 */
   'sync:changed': { rev: string; state: PetState };
   /** AI / 工具 */

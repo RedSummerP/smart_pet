@@ -39,6 +39,7 @@ import memoryMatchPlugin from '@smartpet/plugin-memory-match';
 import game2048Plugin from '@smartpet/plugin-game-2048';
 import skinsPlugin, { CLASSIC_SKIN } from '@smartpet/plugin-skins-classic';
 import funToolsPlugin from '@smartpet/plugin-tools-fun';
+import achievementsPlugin from '@smartpet/plugin-achievements';
 import type { SkinPalette } from '@smartpet/core';
 import type { PlatformBridge } from '../bridge/types.js';
 
@@ -80,6 +81,20 @@ export interface SkinEntry {
 export interface AppStateOptions {
   /** 测试/自托管注入 supabase 客户端工厂（缺省动态 import supabase-js） */
   supabaseFactory?: (url: string, anonKey: string) => unknown;
+}
+
+/** 宠物行为钩子（hooks capability）：宿主在宠物事件发生时派发 */
+export interface PetHooks {
+  onTick?(dtMs: number, state: PetState): void | Promise<void>;
+  onFed?(item: import('@smartpet/core').FoodItem, state: PetState): void | Promise<void>;
+  onPlayed?(amount: number, state: PetState): void | Promise<void>;
+  onLevelUp?(from: number, to: number, state: PetState): void | Promise<void>;
+  onMoodChange?(
+    from: import('@smartpet/core').Emotion,
+    to: import('@smartpet/core').Emotion,
+    state: PetState,
+  ): void | Promise<void>;
+  onGameScore?(game: string, score: number): void | Promise<void>;
 }
 
 let seq = 0;
@@ -132,6 +147,8 @@ export class AppState {
   private extraTools: PetToolDef[] = [];
   private providerPresets = new Map<string, ProviderConfig & { id: string }>();
   private syncAdapterFactories = new Map<string, () => SyncBackend>();
+  private hooksList: PetHooks[] = [];
+  private hooksByPlugin = new Map<string, PetHooks>();
   private skinPalettes = new Map<string, SkinPalette>();
   private gamesByPlugin = new Map<string, string[]>();
   private skinsByPlugin = new Map<string, string[]>();
@@ -202,6 +219,11 @@ export class AppState {
             this.syncAdapterFactories.set(spec.adapterId, create);
             this.syncAdaptersByPlugin.set(pluginId, [spec.adapterId]);
             this.emit();
+          } else if (spec.kind === 'hooks') {
+            const { hooks } = impl as { hooks: PetHooks };
+            this.hooksByPlugin.set(pluginId, hooks);
+            this.hooksList = [...this.hooksList, hooks];
+            this.emit();
           }
         },
         onCapabilityRemoved: (pluginId) => {
@@ -236,6 +258,12 @@ export class AppState {
             for (const id of adapterIds) this.syncAdapterFactories.delete(id);
             this.emit();
           }
+          const hooks = this.hooksByPlugin.get(pluginId);
+          if (hooks) {
+            this.hooksByPlugin.delete(pluginId);
+            this.hooksList = this.hooksList.filter((h) => h !== hooks);
+            this.emit();
+          }
         },
       },
     });
@@ -247,6 +275,21 @@ export class AppState {
     this.sync.start();
     // 本地变更 → 落盘（本地优先：进程重启后宠物仍在）
     this.store.subscribe(() => this.schedulePersist());
+
+    // hooks capability 派发：宠物行为事件 → 已注册插件钩子（宠物行为插件化）
+    this.bus.on('pet:fed', ({ item, state }) => this.dispatchHooks((h) => h.onFed?.(item, state)));
+    this.bus.on('pet:tick', ({ dtMs, state }) => this.dispatchHooks((h) => h.onTick?.(dtMs, state)));
+    this.bus.on('pet:played', ({ amount, state }) => this.dispatchHooks((h) => h.onPlayed?.(amount, state)));
+    this.bus.on('pet:level-up', ({ from, to, state }) => this.dispatchHooks((h) => h.onLevelUp?.(from, to, state)));
+    this.bus.on('pet:mood-change', ({ from, to, state }) =>
+      this.dispatchHooks((h) => h.onMoodChange?.(from, to, state)),
+    );
+    this.bus.on('game:score', ({ game, score }) => this.dispatchHooks((h) => h.onGameScore?.(game, score)));
+    this.bus.on('achievement:unlocked', ({ id, name }) => {
+      if (this.store.get().unlocks.includes(id)) return;
+      this.store.reduce({ type: 'unlock', id });
+      this.pushEntry({ id: nextId(), role: 'notice', text: `🏆 解锁成就「${name}」`, at: Date.now() });
+    });
 
     // 游戏成绩 → 宠物状态（gameProgress 随 CRDT 多端同步）
     this.bus.on('game:score', ({ game, score }) => {
@@ -418,6 +461,18 @@ export class AppState {
   }
 
   // ---- 内部 ----
+
+  /** 钩子派发（单个钩子异常隔离，含异步拒绝，不影响其它插件） */
+  private dispatchHooks(fn: (hooks: PetHooks) => void | Promise<void>): void {
+    for (const hooks of this.hooksList) {
+      try {
+        const result = fn(hooks);
+        if (result instanceof Promise) void result.catch(() => undefined);
+      } catch {
+        // 钩子异常静默隔离
+      }
+    }
+  }
 
   /** 本地持久化：从 bridge 恢复宠物文档（base64） */
   private async restorePet(): Promise<void> {
@@ -679,8 +734,8 @@ export class AppState {
         );
       },
     };
-    // 官方插件走正式插件体系：游戏 + 皮肤 + 工具（tools capability 汇入 agent 工具集）
-    for (const def of [demo, memoryMatchPlugin, game2048Plugin, skinsPlugin, funToolsPlugin]) {
+    // 官方插件走正式插件体系：游戏 + 皮肤 + 工具 + 成就（hooks capability）
+    for (const def of [demo, memoryMatchPlugin, game2048Plugin, skinsPlugin, funToolsPlugin, achievementsPlugin]) {
       await this.registry.register(def.manifest, async () => def);
       await this.registry.enable(def.manifest.id);
     }

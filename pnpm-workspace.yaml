@@ -4,6 +4,7 @@ packages:
   - "plugins/games/*"
   - "plugins/skins/*"
   - "plugins/tools/*"
+  - "plugins/behaviors/*"
   - "plugins/providers/*"
 allowBuilds:
   '@google/genai': false
