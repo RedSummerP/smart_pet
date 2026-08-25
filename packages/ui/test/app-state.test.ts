@@ -12,7 +12,9 @@ describe('AppState 装配层', () => {
     expect(app.ready).toBe(true);
     expect(app.bridgeKind).toBe('mock');
     expect(app.settingsText).toContain('llm-pi-ai');
-    expect(app.games.map((g) => g.title)).toEqual(expect.arrayContaining(['猜数字', '记忆翻牌']));
+    expect(app.games.map((g) => g.title)).toEqual(
+      expect.arrayContaining(['猜数字', '记忆翻牌', '2048']),
+    );
     expect(app.agent).toBeTruthy();
     expect(app.modelLabel).toBeTruthy();
   });

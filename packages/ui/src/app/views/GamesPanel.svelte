@@ -1,5 +1,6 @@
 <script lang="ts">
   import MemoryMatchWidget from './MemoryMatchWidget.svelte';
+  import Game2048Widget from './Game2048Widget.svelte';
   import type { AppSnapshot } from '../app-state.js';
   import type { AppState } from '../app-state.js';
 
@@ -13,6 +14,8 @@
 
   {#if activeEntry === 'memory-match'}
     <MemoryMatchWidget {app} onExit={() => (activeEntry = null)} />
+  {:else if activeEntry === 'game-2048'}
+    <Game2048Widget {app} onExit={() => (activeEntry = null)} />
   {:else}
     {#if state.games.length === 0}
       <div class="hint">
@@ -26,7 +29,7 @@
           <strong>{g.title}</strong>
           <p>{g.description}</p>
           <div class="game-card-actions">
-            {#if g.entry === 'memory-match'}
+            {#if g.entry === 'memory-match' || g.entry === 'game-2048'}
               <button onclick={() => (activeEntry = g.entry)}>开始游戏</button>
             {:else}
               <button onclick={() => alert(`游戏「${g.title}」的 UI 组件将随插件版本上线（entry: ${g.entry}）`)}>

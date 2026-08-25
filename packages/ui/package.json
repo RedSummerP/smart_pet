@@ -13,6 +13,7 @@
   "dependencies": {
     "@smartpet/ai": "workspace:*",
     "@smartpet/core": "workspace:*",
+    "@smartpet/plugin-game-2048": "workspace:*",
     "@smartpet/plugin-memory-match": "workspace:*",
     "@smartpet/plugin-skins-classic": "workspace:*",
     "@smartpet/sync": "workspace:*",

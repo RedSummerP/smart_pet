@@ -34,6 +34,7 @@ import {
   type SyncBackend,
 } from '@smartpet/sync';
 import memoryMatchPlugin from '@smartpet/plugin-memory-match';
+import game2048Plugin from '@smartpet/plugin-game-2048';
 import skinsPlugin, { CLASSIC_SKIN } from '@smartpet/plugin-skins-classic';
 import type { SkinPalette } from '@smartpet/core';
 import type { PlatformBridge } from '../bridge/types.js';
@@ -609,8 +610,8 @@ export class AppState {
         );
       },
     };
-    // 官方插件走正式插件体系：记忆翻牌 + 皮肤包
-    for (const def of [demo, memoryMatchPlugin, skinsPlugin]) {
+    // 官方插件走正式插件体系：记忆翻牌 + 2048 + 皮肤包
+    for (const def of [demo, memoryMatchPlugin, game2048Plugin, skinsPlugin]) {
       await this.registry.register(def.manifest, async () => def);
       await this.registry.enable(def.manifest.id);
     }
