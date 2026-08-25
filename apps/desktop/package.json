@@ -1,0 +1,15 @@
+{
+  "name": "smartpet-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SmartPet Tauri 宿主（Windows / Linux / macOS / Android）",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  }
+}

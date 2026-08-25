@@ -32,3 +32,21 @@ pnpm dev           # Web UI 开发服务器（浏览器 + mock bridge）
 
 > 本机（Orange Pi）根分区只读且缺 webkit2gtk-4.1，无法编译 Tauri 窗口版；逻辑包与 Web UI 在本机验证，窗口构建由 CI / 具备系统依赖的机器执行。
 > 本机工具链 writable 目录：`.tools/`（pnpm store、npm cache、rustup/cargo）。
+
+## 桌面构建（具备系统依赖的机器）
+
+```bash
+# Linux (Ubuntu 22.04+)
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+pnpm install
+pnpm tauri icon apps/desktop/src-tauri/icons/icon.png   # 生成各平台图标
+pnpm --filter smartpet-desktop tauri build
+
+# Android（需 JDK 17 + Android SDK）
+pnpm --filter smartpet-desktop tauri android init --ci
+pnpm --filter smartpet-desktop tauri android build apk
+```
+
+## CI
+
+`.github/workflows/build.yml`：Linux / macOS / Windows 桌面三平台 + Android APK 四作业矩阵（push 到 main 或手动触发）。

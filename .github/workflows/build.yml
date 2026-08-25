@@ -1,0 +1,85 @@
+# SmartPet 四平台构建矩阵：Linux / macOS / Windows（desktop）+ Android（apk）
+# 本机（Orange Pi）缺 webkit2gtk-4.1 且根分区只读，窗口版构建由 CI 执行。
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  desktop-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - name: Install Linux system deps (webkit2gtk-4.1)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter smartpet-desktop tauri icon src-tauri/icons/icon.png
+        working-directory: apps/desktop
+      - run: pnpm --filter @smartpet/ui build
+      - run: pnpm --filter smartpet-desktop tauri build
+      - uses: actions/upload-artifact@v4
+        with: { name: smartpet-linux, path: 'apps/desktop/src-tauri/target/release/bundle/' }
+
+  desktop-macos:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter smartpet-desktop tauri icon src-tauri/icons/icon.png
+        working-directory: apps/desktop
+      - run: pnpm --filter @smartpet/ui build
+      - run: pnpm --filter smartpet-desktop tauri build
+      - uses: actions/upload-artifact@v4
+        with: { name: smartpet-macos, path: 'apps/desktop/src-tauri/target/release/bundle/' }
+
+  desktop-windows:
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter smartpet-desktop tauri icon src-tauri/icons/icon.png
+        working-directory: apps/desktop
+      - run: pnpm --filter @smartpet/ui build
+      - run: pnpm --filter smartpet-desktop tauri build
+      - uses: actions/upload-artifact@v4
+        with: { name: smartpet-windows, path: 'apps/desktop/src-tauri/target/release/bundle/' }
+
+  mobile-android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - name: Install Linux system deps (桌面目标前置要求)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @smartpet/ui build
+      # android/ 工程由 CI 生成（避免把大体积 gradle 工程入仓）
+      - run: pnpm --filter smartpet-desktop tauri android init --ci
+        working-directory: apps/desktop
+      - run: pnpm --filter smartpet-desktop tauri android build apk --debug
+        working-directory: apps/desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smartpet-android
+          path: 'apps/desktop/src-tauri/gen/android/app/build/outputs/apk/'
