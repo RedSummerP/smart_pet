@@ -18,8 +18,10 @@ doc = {
 ```
 
 - **计数器**：`satiety/energy/happiness/exp/level` 用 Automerge Counter —— 两台设备各喂一条鱼，最终值 = 双方增量之和，**不丢喂食**。
-- **map/数组**：Automerge 默认合并；重名冲突按 last-writer-wins。
-- 每次应用 `PetAction` 后的状态变更 → `doc` 变更 → 本地落盘 + 标记待同步。
+  - **封顶语义**：饱食/精力/心情 0..100 是有上限的游戏属性，计数器记录"有效增益"（封顶后不再增长）；exp/level 无上限、无损合并。
+  - **整数计数器 + 进位寄存器**：Automerge 计数器为整数，tick 衰减等小数增量进文档内 `carried` 寄存器累计，达到 ±1 进位/借位到计数器；快照读数 = 计数器 + carried。
+- **map/数组**：Automerge 默认合并；重名冲突按 last-writer-wins；unlocks 为 append-only（并发解锁都保留）。
+- 每次应用 `PetAction` 后的状态变更 → 差量合入文档 → 本地落盘 + 标记待同步。
 
 ## 2. 变更流程
 
@@ -27,16 +29,18 @@ doc = {
 UI/插件 ──PetAction──► PetRuntime.dispatch
                            │  petReducer（纯函数）
                            ▼
-                    新 PetState ──► Automerge doc 变更（本地 commit）
+                    新 PetState ──► 差量合入 Automerge doc（计数器 increment / map set）
                                         │
                      ┌──────────────────┼──────────────────┐
                      ▼                  ▼                  ▼
-              本地快照（JSON）    pending oplog          SyncAdapter.push(doc)
-              ~/.smartpet/state/                      （在线的端）
+              本地快照（JSON）    变更差分（changes）    SyncAdapter.push(二进制)
+              ~/.smartpet/state/     快照保存                  （在线的端）
 ```
 
-- 断线：变更进 pending 队列，重连后补推。
-- 上线：`adapter.pull()` 拿远端 doc → `Automerge.merge(local, remote)` → 合并结果写回 → 广播 `sync:changed { rev, state }`。
+- **同步粒度**：传输用二进制快照，合并用**变更差分**（`getChanges(本地, 远端)` + `applyChanges`）——**绝不整库 `Automerge.merge`**（会重复计入双方 genesis 的初始值）。
+- **genesis 采纳**：宠物由一台设备创建，其文档即 genesis；新设备首次收到远端且本地未做任何变更（pristine）→ 整体采纳远端为基底。
+- 断线：变更进 Automerge 历史，重连后随下次 push 携带。
+- 上线：`adapter.pull()` → 差分应用 → 广播 `sync:changed { rev, state }` → 合并产物回推。
 
 ## 3. SyncAdapter 接口（可插拔）
 
@@ -63,9 +67,10 @@ interface SyncAdapter {
 
 ## 4. 冲突策略
 
-- 同字段并发写：Automerge 规则（计数器相加、map last-writer-wins）
+- 同字段并发写：Automerge 规则（计数器相加、map last-writer-wins、数组 append）
 - 业务级冲突（如两端同时改名）：last-writer-wins + `pet:rename` 事件让 UI 提示
 - 升级迁移：`schemaVersion` 变化 → 迁移函数注册表（`migrations: {1: (doc) => doc}`），升级前备份
+- 边界：两台设备各自"从零创建"同一宠物（离线双新装）不受支持——由 genesis 采纳规则决定以先到达者为准（文档化限制）
 
 ## 5. 隐私与安全
 

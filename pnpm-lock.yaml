@@ -53,6 +53,22 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@26.2.0)(yaml@2.9.0)
 
+  packages/sync:
+    dependencies:
+      '@automerge/automerge':
+        specifier: ^2.2.2
+        version: 2.2.2
+      '@smartpet/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@26.2.0)(yaml@2.9.0)
+
 packages:
 
   '@anthropic-ai/sdk@0.91.1':
@@ -63,6 +79,12 @@ packages:
     peerDependenciesMeta:
       zod:
         optional: true
+
+  '@automerge/automerge-wasm@0.17.0':
+    resolution: {integrity: sha512-EPTqadOj+wzv73rPaa80Q+tKnM+XpEtYhqZ4reB9647OZdiQjQwlXo+y/7VrGO+x48Kow0sYpZa9rgx8t785kA==}
+
+  '@automerge/automerge@2.2.2':
+    resolution: {integrity: sha512-tjEMNWXr6wgIZuGpJ7JwFZuKoWBuYt7tl8lCRhC/Pyqht8LsXFMI1stfi3ZrUTqDkJ1qwPSOTS2iwKLw8ObErw==}
 
   '@aws-crypto/sha256-browser@5.2.0':
     resolution: {integrity: sha512-AXfN/lGotSQwu6HNcEsIASo7kWXZ5HYWvfOmSNKDsEqC4OashTp8alTmaz+F7TC2L083SFv5RdB+qU3Vs1kZqw==}
@@ -883,6 +905,10 @@ packages:
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
+  uuid@9.0.0:
+    resolution: {integrity: sha512-MXcSTerfPa4uqyzStbRoTgt5XIe3x5+42+q1sDuy3R5MDk66URdLMOZe5aPX/SQd+kuYAh0FdP/pO28IkQyTeg==}
+    hasBin: true
+
   vite-node@3.2.4:
     resolution: {integrity: sha512-EbKSKh+bh1E1IFxeO0pg1n4dvoOTt0UDiXMd/qn++r98+jPO1xtJilvXldeuQ8giIB5IkpjCgMleHMNEsGH6pg==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
@@ -992,6 +1018,13 @@ snapshots:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
       zod: 3.24.1
+
+  '@automerge/automerge-wasm@0.17.0': {}
+
+  '@automerge/automerge@2.2.2':
+    dependencies:
+      '@automerge/automerge-wasm': 0.17.0
+      uuid: 9.0.0
 
   '@aws-crypto/sha256-browser@5.2.0':
     dependencies:
@@ -1850,6 +1883,8 @@ snapshots:
   typescript@5.7.3: {}
 
   undici-types@8.3.0: {}
+
+  uuid@9.0.0: {}
 
   vite-node@3.2.4(@types/node@26.2.0)(yaml@2.9.0):
     dependencies:

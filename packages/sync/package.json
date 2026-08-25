@@ -1,0 +1,28 @@
+{
+  "name": "@smartpet/sync",
+  "version": "0.1.0",
+  "description": "SmartPet 本地优先同步：Automerge CRDT 宠物状态存储 + 可插拔 SyncAdapter",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@smartpet/core": "workspace:*",
+    "@automerge/automerge": "^2.2.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
