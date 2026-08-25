@@ -21,7 +21,12 @@ import {
   type MutableModels,
   type PetAgent,
 } from '@smartpet/ai';
-import { MemorySyncAdapter, SyncEngine, SyncPetStateStore } from '@smartpet/sync';
+import {
+  MemorySyncAdapter,
+  SyncEngine,
+  SyncPetStateStore,
+} from '@smartpet/sync';
+import memoryMatchPlugin from '@smartpet/plugin-memory-match';
 import type { PlatformBridge } from '../bridge/types.js';
 
 export interface ChatEntry {
@@ -145,6 +150,22 @@ export class AppState {
       debounceMs: 1000,
     });
     this.sync.start();
+
+    // 游戏成绩 → 宠物状态（gameProgress 随 CRDT 多端同步）
+    this.bus.on('game:score', ({ game, score }) => {
+      const prev = this.store.get().gameProgress[game];
+      this.store.reduce({
+        type: 'setGameProgress',
+        game,
+        progress: {
+          score,
+          completed: (prev?.completed ?? 0) + 1,
+          best: Math.max(prev?.best ?? 0, score),
+          updatedAt: Date.now(),
+        },
+      });
+      this.emit();
+    });
   }
 
   get version(): number {
@@ -378,8 +399,11 @@ export class AppState {
         );
       },
     };
-    await this.registry.register(demo.manifest, async () => demo);
-    await this.registry.enable(demo.manifest.id);
+    // 官方插件走正式插件体系：@smartpet/plugin-memory-match（记忆翻牌）
+    for (const def of [demo, memoryMatchPlugin]) {
+      await this.registry.register(def.manifest, async () => def);
+      await this.registry.enable(def.manifest.id);
+    }
   }
 
   private emit(): void {
