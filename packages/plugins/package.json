@@ -18,7 +18,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@smartpet/core": "workspace:*"
+    "@smartpet/core": "workspace:*",
+    "tar": "^7.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
