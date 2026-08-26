@@ -7,7 +7,7 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "echo 'tauri build is separate (CI step pnpm --filter smartpet-desktop tauri build)'"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.1.0"
