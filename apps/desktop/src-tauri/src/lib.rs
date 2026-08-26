@@ -125,32 +125,36 @@ struct TrayAction<'a> {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            use tauri::menu::{MenuBuilder, MenuItemBuilder};
-            let feed = MenuItemBuilder::with_id("feed", "喂食").build(app)?;
-            let play = MenuItemBuilder::with_id("play", "玩耍").build(app)?;
-            let games = MenuItemBuilder::with_id("games", "小游戏").build(app)?;
-            let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
-            let menu = MenuBuilder::new(app)
-                .items(&[&feed, &play, &games, &quit])
-                .build()?;
+            // 托盘菜单仅桌面端可用（tauri::menu / tray_by_id 都是 #[cfg(desktop)]）
+            #[cfg(desktop)]
+            {
+                use tauri::menu::{MenuBuilder, MenuItemBuilder};
+                let feed = MenuItemBuilder::with_id("feed", "喂食").build(app)?;
+                let play = MenuItemBuilder::with_id("play", "玩耍").build(app)?;
+                let games = MenuItemBuilder::with_id("games", "小游戏").build(app)?;
+                let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+                let menu = MenuBuilder::new(app)
+                    .items(&[&feed, &play, &games, &quit])
+                    .build()?;
 
-            if let Some(tray) = app.tray_by_id("main-tray") {
-                tray.set_menu(Some(menu.clone()))?;
-                tray.on_menu_event(move |handle: &tauri::AppHandle, event| {
-                    let action = match event.id.as_ref() {
-                        "feed" => Some("feed"),
-                        "play" => Some("play"),
-                        "games" => Some("games"),
-                        "quit" => {
-                            handle.exit(0);
-                            None
+                if let Some(tray) = app.tray_by_id("main-tray") {
+                    tray.set_menu(Some(menu.clone()))?;
+                    tray.on_menu_event(move |handle: &tauri::AppHandle, event| {
+                        let action = match event.id.as_ref() {
+                            "feed" => Some("feed"),
+                            "play" => Some("play"),
+                            "games" => Some("games"),
+                            "quit" => {
+                                handle.exit(0);
+                                None
+                            }
+                            _ => None,
+                        };
+                        if let Some(action) = action {
+                            let _ = handle.emit("tray:action", TrayAction { action });
                         }
-                        _ => None,
-                    };
-                    if let Some(action) = action {
-                        let _ = handle.emit("tray:action", TrayAction { action });
-                    }
-                });
+                    });
+                }
             }
             Ok(())
         })
