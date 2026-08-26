@@ -85,7 +85,7 @@ jobs:
       # android/ 工程由 CI 生成（避免把大体积 gradle 工程入仓）
       - run: pnpm --filter smartpet-desktop tauri android init --ci
         working-directory: apps/desktop
-      - run: pnpm --filter smartpet-desktop tauri android build apk --debug
+      - run: pnpm --filter smartpet-desktop tauri android build --debug
         working-directory: apps/desktop
       - uses: actions/upload-artifact@v4
         with:
