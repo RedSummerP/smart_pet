@@ -4,7 +4,6 @@
 
 use serde::Serialize;
 use std::path::PathBuf;
-use tauri::{Emitter, Manager};
 
 const DEFAULT_SETTINGS_YAML: &str = r#"# SmartPet AI 提供商配置（key 只存引用，明文 key 进系统钥匙串/keys.json）
 llm-pi-ai:
@@ -117,17 +116,21 @@ fn notify(title: String, body: String) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(desktop)]
 #[derive(Serialize, Clone)]
 struct TrayAction<'a> {
     action: &'a str,
 }
 
+/// 桌面与移动端统一入口；`mobile` cfg 由 tauri-build 注入（Android/iOS）
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             // 托盘菜单仅桌面端可用（tauri::menu / tray_by_id 都是 #[cfg(desktop)]）
             #[cfg(desktop)]
             {
+                use tauri::{Emitter, Manager};
                 use tauri::menu::{MenuBuilder, MenuItemBuilder};
                 let feed = MenuItemBuilder::with_id("feed", "喂食").build(app)?;
                 let play = MenuItemBuilder::with_id("play", "玩耍").build(app)?;
@@ -155,6 +158,10 @@ pub fn run() {
                         }
                     });
                 }
+            }
+            #[cfg(not(desktop))]
+            {
+                let _ = app;
             }
             Ok(())
         })
